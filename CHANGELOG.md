@@ -2,6 +2,15 @@
 
 本文件记录插件版本（`package.json` 的 `version`）与补丁代号（`patch/*` 注入模块）两条线的演进。
 
+## 0.7.0（官方 assistant-step slot）
+
+- **架构**：现代 DSH 改用官方 `conversation.chat.node` / `assistant-step` keyed slot，注册 priority `-1` 的 `RawHtmlAssistant`；普通消息继续复用官方 Assistant component，不再修改 `dsh-web-frontend/dist/assets/index-*.js`，也不依赖 `vc` / `Xu` / `jd` 等压缩内部符号。
+- **生命周期**：修复 late-registration race。slot 已声明但官方 `assistant-step` 尚未注册时，通过 `ctx.slots.subscribe()` 等待 entry mutation；注册成功后取消订阅并防重复，插件 dispose 时同时移除 subscription 与 renderer registration。
+- **渲染与安全**：只有精确 `#vcp-root` 进入 Shadow DOM；默认过滤 script/iframe/object/embed、任意 on*、危险 URL/CSS，仅保留 `input('...')` 安全桥。流式更新采用节点级增量同步，保留已完成 DOM 身分；renderer 异常回退官方 Assistant。
+- **Trusted Mode**：现代执行载体迁入 `RawHtmlCard`。开启后保留 script / iframe / object / embed / WebGL / fetch，脚本只执行一次且可通过 scoped `document` 访问 Shadow DOM；`javascript:` 仍拒绝。关闭时保持严格安全默认。
+- **兼容**：`patch/install-all.cjs`、`install-v6.cjs`、`v6-inject.js` 与 legacy tests 全部保留，只作为缺少官方 slot 的旧 DSH 兼容路径。
+- **测试**：新增 modern slot 回归测试，覆盖已有/晚到 official entry、去重、dispose、普通消息、VCP 分流、renderer OFF、sanitizer、Trusted Mode、crash fallback 与流式 DOM 稳定；测试依赖改为项目本地 `jsdom`。
+
 ## 0.6.2（补丁 v7.2 · 可信模式插件化）
 
 - **审计·安装链三疏漏修复——不给其他用户造成安装困扰（蓝汐 · 2026-08-28 · 先生点名「审计一键安装/补丁注入，不能给用户造成困扰」）**：全链审计发现并修复三处会让其他用户踩坑的疏漏——①**install-v6.cjs 的 case"html" 目标形态落后**：仍是 v6.0 老逻辑（`==="1"`），全新安装后开关未设置时 HTML 不渲染（依赖自检兜底）；升级为 **v6.35 三态化**（`!=="0"` + console.warn 回退诊断），老版/新版（i/l 参数）两套同步；②**install-v6.cjs 缺 case"code" 围栏兜底**：模型把卡片包进 ```html 围栏时显示源码；补 v6.30→v6.35 状态机（CODE_CASE_RAW/V1/V2→V3，vcp-root 白名单 + 三态化），新版前端形态未收录则警告跳过不阻塞；③**trusted-patch.cjs 只支持老版前端**（`i.localName` 锚点），新版 rc.8+（`Xu`/`l` 压缩形态）会锚点 0 命中直接失败——补新锚点组（`l.localName`）+ 代际探测 + 双幂等 + 双语法预检。另将 install-v6 幂等分支升级为**增量加固**（已打旧 v6.0 老逻辑的用户跑本脚本自动升三态化 + 补围栏兜底，备份 + node --check + 失败回滚）；install-all.cjs 加第二步 `update-v6-inject.cjs`（旧 v6 渲染模块就地升级，全新安装幂等跳过）。验证：老 v6 形态模拟 bundle 加固通过（三态化 + 围栏兜底回归）、trusted-patch 新老双锚点模拟全过（新版 Xu 探测/替换/幂等 + 老版还原）、install-all 三步链幂等干跑 exit 0、全套回归 315 断言全绿。

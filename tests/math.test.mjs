@@ -16,7 +16,7 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
-const { JSDOM } = require('G:/AI/AI 助手/VCPChat-main/node_modules/jsdom')
+const { JSDOM } = require('jsdom')
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>')
 const { document, Node, window: domWindow } = dom.window

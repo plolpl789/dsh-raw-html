@@ -1,16 +1,16 @@
 /**
  * dsh-raw-html 可信模式（Trusted Mode）专项测试（v7.2 架构）。
  *
- * v7.2（先生定调）：可信模式的「状态与开关 UI」迁入插件 client 层（lib/client.js）——
+ * 可信模式的状态与开关 UI 位于插件 client 层（lib/client.js）：
  *   - window.__vcpTrusted 由插件定义，随插件启停
- *   - 主 bundle 渲染层（v6-inject 的 isTrusted / vc 条件过滤）对 window.__vcpTrusted
- *     一律防御式调用：插件未加载（停用）→ 自动 false → 行为与旧版一致（安全默认）
+ *   - 开关整合进「VCP 渲染设置」面板，不再创建独立悬浮徽章
+ *   - 主 bundle 渲染层对 window.__vcpTrusted 防御式调用：插件未加载时自动回退 false
  *
  * 验证：
  *   1. 渲染层防御式调用：插件未加载 → script 不执行、URL 白名单严格、on* 不放行
  *   2. 插件层：window.__vcpTrusted 定义正确（localStorage / __DSH_TRUSTED__ 开关等效）
  *   3. 联动：插件开启 → 渲染层放行 script、脚本提取执行、on* 放行、javascript: 仍拒
- *   4. 徽章：installTrustedToggle 挂载 #vcp-trusted-toggle，点击切换 localStorage
+ *   4. UI 回归：不再挂载旧的 #vcp-trusted-toggle 悬浮徽章
  *
  * 运行：node tests/trusted.test.mjs
  */
@@ -19,7 +19,7 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
-const { JSDOM } = require('G:/AI/AI 助手/VCPChat-main/node_modules/jsdom')
+const { JSDOM } = require('jsdom')
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>')
 const { document, Node, window: domWindow } = dom.window
@@ -138,25 +138,10 @@ ok('window.__DSH_TRUSTED__=true 时为 true', () => assert.equal(clientDsOn.wind
 const clientLsOff = loadClient({ 'raw-html.trusted': '0' })
 ok('localStorage=0 时为 false', () => assert.equal(clientLsOff.window.__vcpTrusted(), false))
 
-// ============ 3. 徽章：installTrustedToggle 挂载与切换 ============
-console.log('== 徽章（插件层 installTrustedToggle）==')
-ok('徽章元素 #vcp-trusted-toggle 已挂载', () => assert.ok(clientOff.window.document.getElementById('vcp-trusted-toggle')))
-ok('徽章默认显示「可信模式·关」', () => {
-  const el = clientOff.window.document.getElementById('vcp-trusted-toggle')
-  assert.ok(el.textContent.indexOf('可信模式·关') !== -1)
-})
-ok('点击徽章 → 写入 localStorage=1 并刷新', () => {
-  const el = clientLsOn.window.document.getElementById('vcp-trusted-toggle')
-  assert.ok(el)
-  const ev = clientLsOn.window.document.createEvent('MouseEvents')
-  ev.initEvent('click', true, true)
-  el.dispatchEvent(ev)
-  assert.equal(clientLsOn.window.localStorage.getItem('raw-html.trusted'), '0') // 原为 1 → 切到 0
-  assert.ok(clientLsOn.window.__reloaded)
-})
-ok('徽章幂等（重复调用不重复挂载）', () => {
-  const n = clientOff.window.document.querySelectorAll('#vcp-trusted-toggle').length
-  assert.equal(n, 1)
+// ============ 3. UI 回归：可信模式不再单独悬浮 ============
+console.log('== 可信模式 UI 整合 ==')
+ok('不再挂载旧的 #vcp-trusted-toggle 悬浮徽章', () => {
+  assert.equal(clientOff.window.document.querySelectorAll('#vcp-trusted-toggle').length, 0)
 })
 
 // ============ 4. 联动：插件开启 → 渲染层放行 ============

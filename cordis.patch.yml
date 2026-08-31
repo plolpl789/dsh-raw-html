@@ -1,6 +1,6 @@
-# dsh-raw-html bundle patch: inserts its public dsh.client entry into the web plugin roster.
-# 与前端渲染补丁（patch/patch-frontend.cjs）配合：
-# 补丁负责「渲染 HTML 的能力」，本插件负责「开关按钮 + input() 交互桥」。
+# dsh-raw-html bundle entry: inserts its public dsh.client entry into the web plugin roster.
+# 现代 DSH 通过 conversation.chat.node / assistant-step 官方 slot 渲染 HTML，
+# 不修改 dsh-web-frontend dist；patch/ 目录仅保留给旧版 DSH 兼容使用。
 - insert:
     - id: dsh-raw-html
       name: 'dsh-raw-html'
