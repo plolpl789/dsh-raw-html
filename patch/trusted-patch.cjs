@@ -14,6 +14,7 @@
 'use strict'
 
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const vm = require('node:vm')
 const { execFileSync } = require('node:child_process')
@@ -44,6 +45,10 @@ function findBundle() {
   }
   addDir(path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
   addDir(path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
+  // POSIX（Linux/macOS）：$DSH_HOME 或 ~/.dsh
+  const dshHome = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+  addDir(path.join(dshHome, 'profiles', 'web', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
+  addDir(path.join(dshHome, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
   return candidates[0] || null
 }
 

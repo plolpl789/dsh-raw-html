@@ -39,6 +39,7 @@
 'use strict'
 
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
@@ -67,6 +68,10 @@ function findBundle() {
   addDir(path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
   addDir(path.join(process.env.USERPROFILE || '', '.dsh', 'profiles', 'web', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
   addDir(path.join(process.env.USERPROFILE || '', '.dsh', 'profiles', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
+  // POSIX（Linux/macOS）：$DSH_HOME 或 ~/.dsh —— 前端 dist 经 profile 软链指向实际构建产物
+  const dshHome = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+  addDir(path.join(dshHome, 'profiles', 'web', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
+  addDir(path.join(dshHome, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
   return candidates[0] || null
 }
 
@@ -114,6 +119,34 @@ const CASE_V6_NEW_LEGACY = String.raw`case"html":return function(){if(typeof loc
 
 // vc(Xu) 属性循环 → v6（新版变量名 d/l/u；style 解析内联，含 onclick 桥 / 词边界过滤 / URL 白名单 / ref 锁定）
 const VC_V6_NEW = String.raw`for(const d of l.attributes){if(d.name==="onclick"){const m=/^input\s*\(\s*['"]([\s\S]*?)['"]\s*\)\s*;?\s*$/.exec(d.value);if(m)u.onClick=function(){const fn=window.__dshInput;fn&&fn(m[1])};continue}if(/^on/i.test(d.name))continue;if(d.name==="style"){let sv=d.value;sv=sv.replace(/position\s*:\s*fixed\s*;?/gi,"").replace(/z-index\s*:\s*\d{4,}\s*;?/gi,"").replace(/(?<![\w-])content\s*:[^;]*;?/gi,"");let so={};for(const st of sv.split(";")){const ci=st.indexOf(":");if(ci===-1)continue;const k=st.slice(0,ci).trim().replace(/-([a-z])/g,(x,y)=>y.toUpperCase());so[k]=st.slice(ci+1).trim()}u.style=so;u.ref=function(el){if(el)for(const st2 of sv.split(";")){const j=st2.indexOf(":");if(j===-1)continue;const p=st2.slice(0,j).trim(),v=st2.slice(j+1).trim();if(v&&/^(color|font-family|font-size|font-weight|font-style|line-height|letter-spacing|text-align|text-shadow)$/.test(p))el.style.setProperty(p,v,"important")}};continue}if(d.name==="class"){u.className=d.value;continue}if(d.name==="href"&&!/^(https?:|mailto:|\/|#)/i.test(d.value))continue;if(d.name==="src"&&!/^(https?:|data:image\/|\/|#)/i.test(d.value))continue;if((d.name==="action"||d.name==="formaction"||d.name==="xlink:href")&&!/^(https?:|mailto:|\/|#)/i.test(d.value))continue;u[d.name]=d.value}`
+
+// ---- 第三代前端锚点（0.1.5-alpha.2+ · markdown 管线不再内置 HTML 解析器）----
+// DSH 0.1.5 起 ui-primitives 的渲染器写明「无 HTML 解析器进入管线」，原 vc/Xu 属性
+// 转换函数整体消失，只剩 render.tsx case 'html' 返回字面文本。可复用的宿主设施：
+//   · 渲染器 switch  function Z2(t,r,i)   （t=节点、r=key、i=渲染上下文，含 streaming）
+//   · DOM→React 转换 function u5(t,r)     （KaTeX 结果路径；style 解析 xg(t)）
+//   · 模块作用域 React / jsx runtime       （压缩名为 I / a）
+// 三者经注入的 window.__vcpHost 桥给 v6 模块（v6-inject.js 里 __vcpHostRef 惰性读取）。
+const CASE_ORIG_3 = String.raw`case"html":return t.value;`
+
+// case"html" → v6（第三代：上下文参数 i，streaming 取 i.streaming；顺手补一次宿主桥，
+// 防止模块顶层初始化因 TDZ 未生效）
+const CASE_V6_3 = String.raw`case"html":return function(){if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"){try{if(typeof window!=="undefined"&&!window.__vcpHost)window.__vcpHost={React:I,createElement:I.createElement,Fragment:I.Fragment,jsx:a.jsx,jsxs:a.jsxs,vc:u5,hp:xg};var vr=window.__vcpStable&&window.__vcpStable.render(t.value,i.streaming);if(vr!==null&&vr!==undefined)return vr}catch(e){if(typeof console!=="undefined")console.warn("[vcp] html 渲染异常，已回退源码",e)}}else if(typeof console!=="undefined")console.warn('[vcp] HTML 渲染已关闭（dsh.rawHtml==="0"，</> 按钮可重新开启）');return t.value}();`
+
+// 老 v6.0 第三代形态（==="1"）——供「增量加固」检测升级
+const CASE_V6_3_LEGACY = String.raw`case"html":return function(){if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")==="1"){try{if(typeof window!=="undefined"&&!window.__vcpHost)window.__vcpHost={React:I,createElement:I.createElement,Fragment:I.Fragment,jsx:a.jsx,jsxs:a.jsxs,vc:u5,hp:xg};var vr=window.__vcpStable&&window.__vcpStable.render(t.value,i.streaming);if(vr!==null&&vr!==undefined)return vr}catch(e){}}return t.value}();`
+
+// u5 属性循环（原始态）：变量 u=属性、i=DOM 节点、s=props；无任何安全过滤
+const U5_ORIG = String.raw`const i=t,s={key:r};for(const u of i.attributes)u.name==="class"?s.className=u.value:u.name==="style"?s.style=xg(u.value):s[u.name]=u.value;`
+const SCRIPT_FILTER_3 = String.raw`if(i.localName==="script"||i.localName==="iframe"||i.localName==="object"||i.localName==="embed")return null;`
+// u5 属性循环 → v6（含 script/iframe 过滤、onclick 桥、style 消毒 + !important 锁定、URL 白名单）
+const U5_V6 = String.raw`const i=t,s={key:r};if(i.localName==="script"||i.localName==="iframe"||i.localName==="object"||i.localName==="embed")return null;for(const u of i.attributes){if(u.name==="onclick"){const m=/^input\s*\(\s*['"]([\s\S]*?)['"]\s*\)\s*;?\s*$/.exec(u.value);if(m)s.onClick=function(){const fn=window.__dshInput;fn&&fn(m[1])};continue}if(/^on/i.test(u.name))continue;if(u.name==="style"){let sv=u.value;sv=sv.replace(/position\s*:\s*fixed\s*;?/gi,"").replace(/z-index\s*:\s*\d{4,}\s*;?/gi,"").replace(/(?<![\w-])content\s*:[^;]*;?/gi,"");s.style=xg(sv);s.ref=function(el){if(el)for(const d of sv.split(";")){const j=d.indexOf(":");if(j===-1)continue;const p=d.slice(0,j).trim(),v=d.slice(j+1).trim();if(v&&/^(color|font-family|font-size|font-weight|font-style|line-height|letter-spacing|text-align|text-shadow)$/.test(p))el.style.setProperty(p,v,"important")}};continue}if(u.name==="class"){s.className=u.value;continue}if(u.name==="href"&&!/^(https?:|mailto:|\/|#)/i.test(u.value))continue;if(u.name==="src"&&!/^(https?:|data:image\/|\/|#)/i.test(u.value))continue;if((u.name==="action"||u.name==="formaction"||u.name==="xlink:href")&&!/^(https?:|mailto:|\/|#)/i.test(u.value))continue;s[u.name]=u.value}`
+// 幂等特征（加固后的 u5 形态）
+const U5_V6_MARK = String.raw`const i=t,s={key:r};if(i.localName==="script"`
+
+// 注入点：u5 定义前；宿主桥先落地再把 v6 模块挂进同一模块作用域
+const U5_DEF_BEFORE = String.raw`}function u5(t,r){`
+const HOST_INIT_3 = String.raw`;try{if(typeof window!=="undefined"&&!window.__vcpHost){window.__vcpHost={React:I,createElement:I.createElement,Fragment:I.Fragment,jsx:a.jsx,jsxs:a.jsxs,vc:u5,hp:xg}}}catch(e){}`
 
 // ---- case"code" 围栏兜底（v6.30 → v6.35 三态化 · 老版前端锚点）----
 // 模型把卡片包进 ```html 围栏时 markdown 解析为 code 节点 → 显示源码；
@@ -172,13 +205,17 @@ function main() {
   const isNewFrontend = t.includes('function Xu(n,i){') && !t.includes('function vc(n,r){')
   if (isNewFrontend) console.log('[install-v6] 探测到新版前端（rc.8+ · Xu 压缩形态），使用新锚点组')
 
+  // 第三代探测（0.1.5-alpha.2+）：markdown 管线无 HTML 解析器，宿主只剩 u5/xg + I/a
+  const isGen3 = t.includes('function u5(t,r){') && !t.includes('function Xu(n,i){') && !t.includes('function vc(n,r){')
+  if (isGen3) console.log('[install-v6] 探测到第三代前端（0.1.5-alpha.2+ · u5/xg 压缩形态），使用第三代锚点组')
+
   // 已是 v6 → 增量加固：老 v6.0 形态（==="1"）升级三态化、补 case"code" 围栏兜底；
   // 无变更则跳过（幂等）。有变更时备份 + 写回 + node --check + 失败回滚。
   if (t.includes(V6_MARK)) {
     let hardened = t
     const done = []
-    const legacyTarget = isNewFrontend ? CASE_V6_NEW_LEGACY : CASE_V6_LEGACY
-    const newTarget = isNewFrontend ? CASE_V6_NEW : CASE_V6
+    const legacyTarget = isGen3 ? CASE_V6_3_LEGACY : (isNewFrontend ? CASE_V6_NEW_LEGACY : CASE_V6_LEGACY)
+    const newTarget = isGen3 ? CASE_V6_3 : (isNewFrontend ? CASE_V6_NEW : CASE_V6)
     const nLegacy = countOccurrences(hardened, legacyTarget)
     if (nLegacy === 1) {
       hardened = hardened.split(legacyTarget).join(newTarget)
@@ -186,7 +223,19 @@ function main() {
     } else if (nLegacy > 1) {
       console.warn('[install-v6] 加固跳过：case"html" 老形态命中多次（异常），不自动修改')
     }
-    if (!isNewFrontend && countOccurrences(hardened, CODE_CASE_V3) === 0) {
+    if (isGen3) {
+      // 第三代：u5 属性循环尚未加固（早期 gen3 补丁）→ 补齐宿主桥与安全过滤
+      if (countOccurrences(hardened, U5_V6_MARK) === 0 && countOccurrences(hardened, U5_ORIG) === 1) {
+        hardened = hardened.split(U5_ORIG).join(U5_V6)
+        done.push('u5 属性循环 → v6 安全过滤')
+      }
+      if (!hardened.includes('window.__vcpHost={React:I')) {
+        const nDef = countOccurrences(hardened, U5_DEF_BEFORE)
+        if (nDef === 1) { hardened = hardened.split(U5_DEF_BEFORE).join('}' + HOST_INIT_3 + 'function u5(t,r){'); done.push('宿主桥 window.__vcpHost 注入') }
+      }
+      console.warn('[install-v6] 第三代前端 case"code" 围栏兜底未收录，跳过（不影响基础渲染）')
+    }
+    if (!isNewFrontend && !isGen3 && countOccurrences(hardened, CODE_CASE_V3) === 0) {
       for (const [label, from] of [['case"code"(原始)', CODE_CASE_RAW], ['case"code"(v6.30)', CODE_CASE_V1], ['case"code"(v6.32)', CODE_CASE_V2]]) {
         const nc = countOccurrences(hardened, from)
         if (nc === 1) { hardened = hardened.split(from).join(CODE_CASE_V3); done.push('case"code" 围栏兜底 → v6.35 三态化'); break }
@@ -225,7 +274,15 @@ function main() {
   let next = t
 
   // 1) case"html" 分支 → v6
-  if (countOccurrences(next, CASE_ORIG) === 1) {
+  if (isGen3) {
+    if (countOccurrences(next, CASE_ORIG_3) === 1) {
+      next = replaceOnce(next, CASE_ORIG_3, CASE_V6_3, 'case"html"(第三代原始)')
+    } else {
+      console.error('[install-v6] ✗ 第三代 case"html" 分支形态未知（0.1.5-alpha.2 压缩形态可能又变了）。')
+      console.error('[install-v6]   已安全中止（备份已保留，未写入修改）。')
+      process.exit(1)
+    }
+  } else if (countOccurrences(next, CASE_ORIG) === 1) {
     next = replaceOnce(next, CASE_ORIG, caseTarget, 'case"html"(原始)')
   } else if (!isNewFrontend && countOccurrences(next, CASE_ENHANCED_START) === 1 && countOccurrences(next, CASE_ENHANCED_END) >= 1) {
     next = replaceRange(next, CASE_ENHANCED_START, CASE_ENHANCED_END, caseTarget, 'case"html"(增强态)')
@@ -242,7 +299,9 @@ function main() {
 
   // 1.5) case"code" 围栏兜底 → v6.35 三态化（增强能力：模型把卡片包进 ```html 围栏时仍渲染）
   // 新版前端（rc.8+）case"code" 形态未收录：跳过 + 警告，不阻塞安装（不影响基础渲染）。
-  if (isNewFrontend) {
+  if (isGen3) {
+    console.warn('[install-v6] 第三代前端（0.1.5-alpha.2+）case"code" 锚点未收录，围栏兜底跳过（不影响基础渲染）')
+  } else if (isNewFrontend) {
     console.warn('[install-v6] 新版前端（rc.8+）case"code" 锚点未收录，围栏兜底跳过（不影响基础渲染）')
   } else if (countOccurrences(next, CODE_CASE_V3) !== 0) {
     console.log('[install-v6] ✓ case"code" 围栏兜底已是 v6.35 三态化')
@@ -266,8 +325,10 @@ function main() {
     }
   }
 
-  // 2) vc(Xu) 属性循环 → v6
-  if (isNewFrontend) {
+  // 2) vc(Xu/u5) 属性循环 → v6
+  if (isGen3) {
+    next = replaceOnce(next, U5_ORIG, U5_V6, 'u5 属性循环(第三代原始)')
+  } else if (isNewFrontend) {
     // rc.8+：原始态区间替换（起点/终点不含 jd/Sd 函数名，两版通用），额外补 script 过滤
     next = replaceRange(next, VC_NEW_START, VC_NEW_END, SCRIPT_FILTER_NEW + VC_V6_NEW, 'Xu 属性循环(rc.8+ 原始态)')
   } else if (countOccurrences(next, VC_ORIG) === 1) {
@@ -294,10 +355,10 @@ function main() {
     console.error('[install-v6] 读取 patch/v6-inject.js 失败：', e.message)
     process.exit(1)
   }
-  const defBefore = isNewFrontend ? VC_DEF_NEW_BEFORE : VC_DEF_BEFORE
-  const defAfter = isNewFrontend ? ';function Xu(n,i){' : ';function vc(n,r){'
-  const defLabel = isNewFrontend ? 'Xu 定义前注入 v6 模块' : 'vc 定义前注入 v6 模块'
-  next = replaceOnce(next, defBefore, '}' + v6Inject + defAfter, defLabel)
+  const defBefore = isGen3 ? U5_DEF_BEFORE : (isNewFrontend ? VC_DEF_NEW_BEFORE : VC_DEF_BEFORE)
+  const defAfter = isGen3 ? ';function u5(t,r){' : (isNewFrontend ? ';function Xu(n,i){' : ';function vc(n,r){')
+  const defLabel = isGen3 ? 'u5 定义前注入宿主桥 + v6 模块' : (isNewFrontend ? 'Xu 定义前注入 v6 模块' : 'vc 定义前注入 v6 模块')
+  next = replaceOnce(next, defBefore, '}' + (isGen3 ? HOST_INIT_3 : '') + v6Inject + defAfter, defLabel)
   if (next === null) {
     console.error('[install-v6] v6 模块注入失败，中止（备份已保留）。')
     process.exit(1)
@@ -318,7 +379,7 @@ function main() {
   }
 
   const written = fs.readFileSync(file, 'utf8')
-  const onFilterMark = isNewFrontend ? 'if(/^on/i.test(d.name))continue;' : 'if(/^on/i.test(c.name))continue;'
+  const onFilterMark = isGen3 ? 'if(/^on/i.test(u.name))continue;' : (isNewFrontend ? 'if(/^on/i.test(d.name))continue;' : 'if(/^on/i.test(c.name))continue;')
   const features = [
     [V6_MARK, 'v6 标记 window.__vcpStable'],
     ['window.__dshInput', 'onclick 交互桥 __dshInput'],
@@ -326,21 +387,26 @@ function main() {
     [onFilterMark, 'on* 属性安全过滤'],
     ['setProperty(p,v,"important")', '文字属性 !important 锁定'],
   ]
+  if (isGen3) features.push(['window.__vcpHost={React:I', '宿主桥 window.__vcpHost'])
   for (const [mark, label] of features) {
     if (!written.includes(mark)) {
       ok = false
       console.error(`[install-v6] 特征缺失：${label}`)
-      const idx = written.indexOf(isNewFrontend ? VC_NEW_START : VC_ENHANCED_START)
+      const idx = written.indexOf(isGen3 ? U5_V6_MARK : (isNewFrontend ? VC_NEW_START : VC_ENHANCED_START))
       if (idx !== -1) console.error('[install-v6] debug vc 循环附近 >>>', JSON.stringify(written.slice(idx, idx + 260)))
     }
   }
-  if (countOccurrences(written, CASE_ORIG) !== 0) {
+  if (countOccurrences(written, isGen3 ? CASE_ORIG_3 : CASE_ORIG) !== 0) {
     ok = false
     console.error('[install-v6] 特征异常：仍存在原始 case"html" 分支')
   }
   if (isNewFrontend && countOccurrences(written, String.raw`for(const d of l.attributes)d.name==="class"`) !== 0) {
     ok = false
     console.error('[install-v6] 特征异常：仍存在原始 Xu 属性循环')
+  }
+  if (isGen3 && countOccurrences(written, U5_ORIG) !== 0) {
+    ok = false
+    console.error('[install-v6] 特征异常：仍存在原始 u5 属性循环')
   }
 
   if (!ok) {

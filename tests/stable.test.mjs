@@ -9,7 +9,7 @@
  *   4. 前缀失配（回退 / 多消息切换）→ 重置全量，不串扰
  *   5. 裸文本阻止固化、void 标签、rawtext（script）、incomplete 标签、注释
  *
- * 依赖 jsdom（借用 VCPChat 项目 node_modules，路径见下）。
+ * 依赖 jsdom（经 tests/load-jsdom.cjs 可移植解析：JSDOM_PATH 或本地安装）。
  * 运行：node tests/stable.test.mjs
  */
 import assert from 'node:assert/strict'
@@ -17,7 +17,7 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
-const { JSDOM } = require('G:/AI/AI 助手/VCPChat-main/node_modules/jsdom')
+const { JSDOM } = require('./load-jsdom.cjs')()
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>')
 const { document, Node, window: domWindow } = dom.window

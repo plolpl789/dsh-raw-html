@@ -28,6 +28,7 @@ and the agent outputs following a **maintainable design system**.
 
 **2026-08-24 updates**
 
+- **Third-generation frontend support (0.6.4 · patch v7.3 · 2026-09-10)**: since DSH 0.1.5-alpha.2 the markdown pipeline takes "no HTML parser enters the pipeline" (`render.tsx` case `'html'` returns literal text; the `vc`/`Xu` attribute converters are gone entirely). Ported: a third-generation anchor set (`case"html":return t.value;` + the `u5(t,r)` attribute loop + a `function u5` injection point), a host bridge `window.__vcpHost` (exposing module-scope React `I`, jsx runtime `a`, `u5`, `xg` to the v6 module), and `v6-inject.js` no longer depends on host identifier names (`__vcpF`/`__vcpJsx`/`__vcpFrag` resolve lazily). Also fixed POSIX bundle auto-detection (`$DSH_HOME`/`~/.dsh`) and `update-v6-inject.cjs` idempotency (it used to add one newline byte per re-run). New `tests/gen3-host.test.mjs` end-to-end regression (27 assertions).
 - **Fixed (frontend compatibility)**: `install-v6.cjs` now supports **dsh-web-frontend 0.1.0-rc.8 / 0.1.1-rc.x** (bundle `index-CA9Bpko5.js` / `index-ClqxG24t.js`), where the minifier renamed `vc`→`Xu` and `hp`→`jd`/`Sd`. A new anchor set with automatic generation detection was added; legacy anchors (rc.5~rc.7) are kept intact and regression-verified.
 - **Fixed (startup crash)**: removed the static `@deepseek-ai/schemastery` import from `lib/index.js` — the only third-party runtime dependency. It is now loaded dynamically with a graceful fallback, so the plugin boots fine even when `node_modules` is missing (static import chain is now built-in Node modules only).
 - **Feature**: declarative color presets — write `data-vcp-preset="editorial|chiaroscuro|fauvism|cyberpunk|wabi_sabi"` and the built-in VCPColorEngine deterministically generates the whole `--vcp-*` palette (WCAG contrast & sRGB gamut closed-loop; hex never passes through the LLM; stable across streaming rebuilds).
@@ -45,7 +46,7 @@ and the agent outputs following a **maintainable design system**.
 ## Versioning
 
 - **Plugin version**: the `version` in `package.json` (currently **0.3.0**), upgraded via `dsh plugin`.
-- **Patch codename**: the evolution codename of the `patch/` injected modules (currently **v6 · sub-version v6.38**), applied to the frontend bundle by `install-all.cjs`. The two evolve independently. Frontend compatibility: **0.0.1-rc.5 ~ 0.1.0-rc.7** and **0.1.0-rc.8 / 0.1.1-rc.x** (the `vc`/`hp` and `Xu`/`jd` minified shapes are auto-detected).
+- **Patch codename**: the evolution codename of the `patch/` injected modules (currently **v6 · sub-version v6.39**), applied to the frontend bundle by `install-all.cjs`. The two evolve independently. Frontend compatibility: **0.0.1-rc.5 ~ 0.1.0-rc.7** (`vc`/`hp`), **0.1.0-rc.8 / 0.1.1-rc.x** (`Xu`/`jd`), and **0.1.5-alpha.2+** (third generation: the markdown pipeline no longer embeds an HTML parser — the only hosts left are `u5`/`xg` on the KaTeX path plus React `I`/`a`, bridged through `window.__vcpHost`); all three minified shapes are auto-detected.
 
 ## Components
 
@@ -88,7 +89,16 @@ dsh plugin --profile web add "path\to\plugin"
 > fails); ③ register the plugin into the web profile; ④ tell the user to restart dsh and hard-refresh.
 > All patches are idempotent — re-installing or re-running after a dsh upgrade has no side effects.
 
-If auto-detection fails, specify the bundle path manually:
+Linux / macOS use the same three steps (auto-detection now also covers `$DSH_HOME` or `~/.dsh`;
+when `dsh` is not on PATH, run the CLI entry directly):
+
+```bash
+node /path/to/dsh-raw-html/patch/install-all.cjs
+node ~/.dsh/profiles/node_modules/@deepseek-ai/dsh/lib/bin.js plugin --profile web add /path/to/dsh-raw-html
+# restart dsh → Ctrl+F5 in the browser → toggle 「</>」
+```
+
+If auto-detection fails, specify the bundle path manually (Windows / Linux alike):
 
 ```powershell
 node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js"

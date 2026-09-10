@@ -25,6 +25,7 @@
 ## 📣 近期更新（v0.6.0 · 补丁 v6.38）
 
 - **自愈层 v6.37/v6.38（2026-08-29）**：卡片渲染撕裂根治——CommonMark 块级标签不能打断段落（文字+换行+`<div>` 撕裂）与卡片内部空行拆分问题，`fixVcpBlank` 补空行/压缩空行，整卡回归单一 htmlFlow（稳定测试 105 断言全绿）。
+- **第三代前端适配（0.6.4 · 补丁 v7.3 · 2026-09-10）**：DSH 0.1.5-alpha.2 起 markdown 管线「无 HTML 解析器进入管线」（`render.tsx` case `'html'` 返回字面文本，原 `vc`/`Xu` 属性转换整体消失）。移植：全新第三代锚点组（`case"html":return t.value;` + `u5(t,r)` 属性循环 + `function u5` 注入点）、third-gen 宿主桥 `window.__vcpHost`（把模块作用域的 React `I` / jsx runtime `a` / `u5` / `xg` 桥给 v6 模块）、`v6-inject.js` 去宿主名硬依赖（`__vcpF`/`__vcpJsx`/`__vcpFrag` 惰性解析）；并修 POSIX bundle 自动探测（`$DSH_HOME`/`~/.dsh`）与 `update-v6-inject.cjs` 幂等（原先每次重跑 +1 字节换行）。新增 `tests/gen3-host.test.mjs` 全链回归（27 断言）。
 - **消息主体渲染器 VCP 接管（2026-08-29）**：主 markdown 渲染器接入 VCP 渲染，消息卡片从此真正渲染为界面（此前官方策略是当源码文本显示）。
 - 早期更新（v0.3.0 · 2026-08-24）：
 
@@ -39,8 +40,8 @@
 
 ## 版本
 
-- **插件版本**：`package.json` 的 `version`（当前 **0.6.0**），随 `dsh plugin` 升级。
-- **补丁代号**：`patch/` 注入模块的演进代号（当前 **v6 · 子版本 v6.38**），由 `install-v6.cjs` 应用到前端 bundle，二者独立演进。前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
+- **插件版本**：`package.json` 的 `version`（当前 **0.6.4**），随 `dsh plugin` 升级。
+- **补丁代号**：`patch/` 注入模块的演进代号（当前 **v6 · 子版本 v6.39**），由 `install-v6.cjs` 应用到前端 bundle，二者独立演进。前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7**（`vc`/`hp`）、**0.1.0-rc.8 / 0.1.1-rc.x**（`Xu`/`jd`）与 **0.1.5-alpha.2+**（第三代：markdown 管线不再内置 HTML 解析器，宿主只剩 KaTeX 路径的 `u5`/`xg` 与 React `I`/`a`，经 `window.__vcpHost` 桥接）三代压缩形态，自动探测适配。
 - 详细变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 组成
@@ -55,7 +56,7 @@
 | 插件（浏览器半侧） | `lib/client.js` | composer 发送按钮旁注入「</>」按钮（点击弹出设置面板，渲染/美学双开关，主题令牌适配深/浅色）+ 暴露 `window.__dshInput`（VCP 按钮 → 填框发送） |
 | **内置精选字体** | `assets/fonts/` | **7 款开源字体（woff2 子集，共约 7.6MB）随插件分发**——文楷/文楷细/马善政楷书/思源黑/思源细黑/思源粗黑/GreatVibes 花体，全部 OFL 授权，任何电脑装上即可用，无需任何配置 |
 | 设计系统文档 | `DESIGN.md` | 完整规范库：字体清单/色板/中文排版/安全铁律（知识层，agent 可按需读取） |
-| 回归测试 | `tests/` | 六套断言（stable 47 + security 43 + bundle + smoke + math + mermaid，共 200+ 项）：帧序列 / 安全过滤 / bundle 完整性（改引擎后必跑） |
+| 回归测试 | `tests/` | 九套断言（stable / security / bundle / smoke / trusted / math / mermaid / boost-fontface / **gen3-host**，共 340+ 项）：帧序列 / 安全过滤 / bundle 完整性 / 第三代宿主桥全链（改引擎后必跑） |
 | 性能基准 | `patch/vcp-fast-bench.cjs` | domino 真实 DOM 解析环境对比新旧路径耗时与提速倍数（自动下载依赖，零安装） |
 | 子集化工具 | `tools/subset_fonts.py` | 维护者用：把新字体裁剪为常用字子集 + woff2 压缩（需 Python + fonttools + brotli） |
 
@@ -92,12 +93,20 @@ dsh plugin --profile web add "本插件路径"
 # 4. 打开「</>」开关（渲染/美学）；需要脚本能力时点右下角「可信模式」徽章
 ```
 
+Linux / macOS 同样三步（自动探测已覆盖 `$DSH_HOME` 或 `~/.dsh`；`dsh` 不在 PATH 时可直接跑 CLI 入口）：
+
+```bash
+node /path/to/dsh-raw-html/patch/install-all.cjs
+node ~/.dsh/profiles/node_modules/@deepseek-ai/dsh/lib/bin.js plugin --profile web add /path/to/dsh-raw-html
+# 重启 dsh → 浏览器 Ctrl+F5 → 开「</>」
+```
+
 > **agent 安装指引**（其他用户让自家 agent 代为安装时，可把以上 4 步原样交给它执行）：
 > ① 确认本机有 Node.js（`node -v`）；② 运行一键安装器 `install-all.cjs`（自动探测 dist bundle，
 > 失败时把 `<bundle路径>` 作为参数传入）；③ 注册插件到 web profile；④ 提醒用户重启 dsh 并强刷。
 > 补丁全部幂等——重复安装、dsh 升级后重跑都不会产生副作用。
 
-探测失败时手动指定 bundle 路径：
+探测失败时手动指定 bundle 路径（Windows / Linux 同理）：
 
 ```powershell
 node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js"
