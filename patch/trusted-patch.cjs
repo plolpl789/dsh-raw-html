@@ -33,6 +33,8 @@ const TRUSTED_NEW =
 function findBundle() {
   const arg = process.argv[2]
   if (arg) return fs.existsSync(arg) ? arg : null
+  // 环境变量覆盖（与 install-v6.cjs 一致：便于在副本上彩排 install-all）
+  if (process.env.DSH_WEB_FRONTEND_DIST && fs.existsSync(process.env.DSH_WEB_FRONTEND_DIST)) return process.env.DSH_WEB_FRONTEND_DIST
   const candidates = []
   const addDir = (d) => {
     if (!d || !fs.existsSync(d)) return
@@ -44,6 +46,11 @@ function findBundle() {
   }
   addDir(path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
   addDir(path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
+  // macOS / Linux（2026-09-11 本地补）
+  const home = process.env.HOME || process.env.USERPROFILE || ''
+  addDir(path.join(home, '.dsh', 'profiles', 'web', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
+  addDir(path.join(home, '.dsh', 'profiles', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
+  addDir(path.join(home, '.dsh', 'runtime', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
   return candidates[0] || null
 }
 
