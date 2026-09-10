@@ -4,13 +4,13 @@
  * 用 jsdom 模拟浏览器环境，按 bundle 中的真实逻辑执行：
  *   DOMParser 解析 vcp-root → vc() 转 React 元素描述 → 断言结构/安全/交互。
  *
- * 依赖：jsdom（借用 VCPChat 项目 node_modules，路径见下；如迁移请更新）。
+ * 依赖：jsdom（经 tests/load-jsdom.cjs 可移植解析：JSDOM_PATH 或本地安装）。
  * 运行：node tests/smoke.test.mjs
  */
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
-const { JSDOM } = require('G:/AI/AI 助手/VCPChat-main/node_modules/jsdom')
+const { JSDOM } = require('./load-jsdom.cjs')()
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>')
 const { document, Node, window } = dom.window

@@ -84,14 +84,32 @@
       if (typeof console !== 'undefined') console.debug('[vcp] dsh.rawHtml 未设置，渲染器自动默认开启（</> 按钮可关闭）')
     }
   } catch (e) {}
-  // 宿主函数别名（跨前端代际兼容）：rc.5~rc.7 为 vc/hp；rc.8+ 压缩器改名 Xu/jd（rc.8 为 Sd）。
-  // 运行时 typeof 探测——两代 bundle 通用，行为与旧版直接调用完全一致。
+  // 宿主函数别名（跨前端代际兼容）：rc.5~rc.7 为 vc/hp；rc.8+ 压缩器改名 Xu/jd（rc.8 为 Sd）；
+  // 0.1.5-alpha.2+（第三代）模块作用域没有这些名字——由 install-v6.cjs 注入的
+  // window.__vcpHost 提供 React / jsx runtime / u5 属性转换 / xg style 解析。
+  // 全部在调用时惰性解析：旧代际直连原符号，测试 stub 亦不受影响。
+  function __vcpHostRef() {
+    return (typeof window !== 'undefined' && window.__vcpHost) ? window.__vcpHost : null
+  }
+  function __vcpF() {
+    var h = __vcpHostRef()
+    if (h && h.jsx) return { jsx: h.jsx, jsxs: h.jsxs, Fragment: h.Fragment, createElement: h.createElement }
+    return (typeof f !== 'undefined') ? f : null
+  }
+  function __vcpJsx(type, props) {
+    return __vcpF().jsx(type, props)
+  }
+  function __vcpFrag() {
+    return __vcpF().Fragment
+  }
   function __vcpVc() {
-    var fn = typeof vc === 'function' ? vc : (typeof Xu === 'function' ? Xu : null)
+    var h = __vcpHostRef()
+    var fn = (h && h.vc) || (typeof vc === 'function' ? vc : (typeof Xu === 'function' ? Xu : null))
     return fn && fn.apply(null, arguments)
   }
   function __vcpHp(s) {
-    var fn = typeof hp === 'function' ? hp : (typeof jd === 'function' ? jd : (typeof Sd === 'function' ? Sd : null))
+    var h = __vcpHostRef()
+    var fn = (h && h.hp) || (typeof hp === 'function' ? hp : (typeof jd === 'function' ? jd : (typeof Sd === 'function' ? Sd : null)))
     return fn ? fn(s) : {}
   }
   // ---- 可信模式（Trusted Mode）v7.1 · 先生定调 2026-08-29 ----
@@ -647,7 +665,7 @@
     var b = doc.body
     for (var j = 0; j < b.childNodes.length; j++) o.push(__vcpVc(b.childNodes[j], o.length))
     if (!o.length) return null
-    var res = o.length === 1 ? o[0] : f.jsx(f.Fragment, { children: o })
+    var res = o.length === 1 ? o[0] : __vcpJsx(__vcpFrag(), { children: o })
     guardChildren(res) // v6.23：子容器布局防崩递归兜底（新增块粒度，微秒级）
     return res
   }
@@ -1082,7 +1100,7 @@
     }
     // 流式：未闭合标签防御——仅当整个 html 连一个 '>' 都没有（首个开标签写到一半）
     // 才不渲染；末尾标签未闭合是流式常态，交给 v6 的 incomplete/tail 增量处理。
-    if (v.indexOf('>') === -1) return f.jsx(f.Fragment, { children: [] })
+    if (v.indexOf('>') === -1) return __vcpJsx(__vcpFrag(), { children: [] })
     var key = 's:' + v
     if (F.c.has(key)) { F.hits++; return F.c.get(key) }
 
@@ -1131,15 +1149,15 @@
       if (ch) cProps.style = Object.assign({}, cProps.style, ch.vars, ch.base)
       if (!F.open.mathRef) F.open.mathRef = makeMathRef(F.open.props.ref)
       cProps.ref = F.open.mathRef
-      R = f.jsx(F.open.tag, cProps)
+      R = __vcpJsx(F.open.tag, cProps)
       var outers = []
       for (var j = 0; j < F.outer.length; j++) outers.push(F.outer[j].el)
-      if (outers.length > 0) R = f.jsx(f.Fragment, { children: [R].concat(outers) })
+      if (outers.length > 0) R = __vcpJsx(__vcpFrag(), { children: [R].concat(outers) })
     } else {
       var all = []
       for (var m = 0; m < F.outer.length; m++) all.push(F.outer[m].el)
       if (tailEl) all.push(tailEl)
-      R = all.length === 0 ? null : (all.length === 1 ? all[0] : f.jsx(f.Fragment, { children: all }))
+      R = all.length === 0 ? null : (all.length === 1 ? all[0] : __vcpJsx(__vcpFrag(), { children: all }))
     }
 
     if (R) {
@@ -1749,7 +1767,7 @@
   function injectRootChrome(R) {
     if (!R || typeof R !== 'object') return
     var el = R
-    if (el.type === f.Fragment && el.props && Array.isArray(el.props.children) && el.props.children.length) {
+    if (el.type === __vcpFrag() && el.props && Array.isArray(el.props.children) && el.props.children.length) {
       el = el.props.children[0]
     }
     if (!el || typeof el !== 'object' || !el.props) return
@@ -1816,7 +1834,7 @@
   // 兼容测试 stub（{tag,props,children}，ref 在 props.ref）用 'ref' in node 区分。
   function attachMathRef(node, streaming) {
     if (!node || typeof node !== 'object') return
-    var isEl = (node.type && node.type !== f.Fragment) || !!node.tag
+    var isEl = (node.type && node.type !== __vcpFrag()) || !!node.tag
     if (isEl) {
       var curRef = ('ref' in node ? node.ref : (node.props && node.props.ref)) || null
       if (curRef && curRef.__vcpMathRef) return

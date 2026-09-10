@@ -15,6 +15,7 @@
 'use strict'
 
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
@@ -32,6 +33,10 @@ function findBundle() {
   }
   addDir(path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
   addDir(path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
+  // POSIX（Linux/macOS）：$DSH_HOME 或 ~/.dsh
+  const dshHome = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+  addDir(path.join(dshHome, 'profiles', 'web', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
+  addDir(path.join(dshHome, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
   return candidates[0] || null
 }
 
@@ -60,7 +65,13 @@ let vcDef = -1
 if (marker !== -1) {
   modStart = marker
   const endIdx = t.indexOf(END_MARK, modStart)
-  if (endIdx !== -1) vcDef = endIdx + END_MARK.length
+  if (endIdx !== -1) {
+    let end = endIdx + END_MARK.length
+    // END 标记后的换行一并纳入替换区间：新模块自带结尾换行，若不吞掉旧换行，
+    // 每次重跑都会多积一个换行（bundle 每次 +1 字节，幂等失效）。
+    while (t[end] === '\n' || t[end] === '\r') end += 1
+    vcDef = end
+  }
 } else {
   const legacy = t.indexOf('dsh-raw-html v6')
   if (legacy !== -1) {
