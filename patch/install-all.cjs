@@ -11,6 +11,10 @@
  *                            全新安装时内容相同自动跳过）
  *   3. trusted-patch.cjs  —— 可信模式 vc/Xu 层条件放行（script/iframe/object/embed 按
  *                            window.__vcpTrusted 放行，默认关闭 = 安全），新旧前端双锚点
+ *   4. install-v7.cjs     —— 【代际兼容 · best-effort】dsh-web-frontend 0.1.5-rc.2+ 使用
+ *                            react-markdown 风格渲染器（B3/c8/wg 锚点组），v6 锚点在该前端上
+ *                            0 命中；v7 负责这一代（三态化 + 属性循环 + 两条解析入口的卡内
+ *                            空行压缩 + 孤片兜底）。目标不是该代时安全跳过，不影响 v6 结果。
  *
  * 幂等安全：两个子脚本各自幂等（已打补丁自动跳过）；锚点不匹配时子脚本安全中止、
  * 不写入任何修改，本脚本随之中止并提示。每一步都带备份 + node --check 健康检查。
@@ -32,8 +36,24 @@ const STEPS = [
   { name: '可信模式（vc/Xu 层条件放行 · 默认关闭保安全）', script: 'trusted-patch.cjs' },
 ]
 
+/**
+ * 代际兼容步骤（best-effort）：
+ *   ① install-v7.cjs —— dsh-web-frontend 0.1.5-rc.2+ 的渲染器换成 react-markdown 风格
+ *      （`B3` / `c8` / `wg` 锚点组），v6 锚点在该前端上 0 命中。v7 负责这一代：
+ *      case"html" 三态化 + 属性循环适配 + 两条解析入口的卡内空行压缩 + 孤片兜底。
+ *   ② 若目标 bundle 不是该代结构，v7 会安全中止（脚本自身不写入、本步骤跳过），
+ *      因此在 v6 已成功的旧前端上不会造成任何影响。
+ */
+const OPTIONAL_STEPS = [
+  { name: 'v7 代适配（dsh-web-frontend 0.1.5-rc.2+ · 不匹配时自动跳过）', script: 'install-v7.cjs' },
+]
+
 const bundleArg = process.argv[2] || ''
 const scriptDir = __dirname
+
+const has = (f) => {
+  try { return require('node:fs').existsSync(path.join(scriptDir, f)) } catch { return false }
+}
 
 console.log('==============================================')
 console.log(' dsh-raw-html 一键安装器（v7.2）')
@@ -57,6 +77,17 @@ for (let i = 0; i < STEPS.length; i++) {
     process.exit(r.status || 1)
   }
   console.log(`[install-all] ✓ 步骤 ${i + 1} 完成`)
+}
+
+for (let i = 0; i < OPTIONAL_STEPS.length; i++) {
+  const step = OPTIONAL_STEPS[i]
+  if (!has(step.script)) continue
+  console.log(`\n[install-all] 可选步骤 ${i + 1}/${OPTIONAL_STEPS.length}：${step.name}`)
+  const args = [path.join(scriptDir, step.script)]
+  if (bundleArg) args.push(bundleArg)
+  const r = spawnSync(process.execPath, args, { stdio: 'inherit' })
+  if (r.status === 0) { console.log(`[install-all] ✓ 可选步骤 ${i + 1} 完成`); continue }
+  console.warn(`[install-all] ⚠ 可选步骤 ${i + 1} 未应用（退出码 ${r.status}）——目标前端不属于该代，已跳过，不影响前面的补丁。`)
 }
 
 console.log('\n==============================================')

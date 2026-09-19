@@ -22,8 +22,9 @@
 ![效果图 4](docs/images/banner-4.jpg)
 ![效果图 5](docs/images/banner-5.jpg)
 
-## 📣 近期更新（v0.6.0 · 补丁 v6.38）
+## 📣 近期更新（v0.6.0 · 补丁 v7）
 
+- **新前端适配 v7（2026-09-20）**：支持 **dsh-web-frontend 0.1.5-rc.2+**。该代把 markdown 渲染器换成 react-markdown 风格实现（`B3`/`c8`/`wg` 锚点组），**v6 的两组锚点在该前端上 0 命中**，`case"html"` 退化为返回源码字符串（卡片显示为文本）。新增 `patch/install-v7.cjs`：三态化 + 属性循环适配 + **两条解析入口**（非流式 `gg()` 与流式 `update()`）的卡内空行压缩 + 孤片兜底（纯闭合片段跳过、未闭合 `vcp-root` 片段改用解析前缓存的整卡文本渲染）；`install-all.cjs` 自动追加该步（目标不是该代时安全跳过）。三层自检 `node tests/verify-v7.cjs` **18 项全绿**。
 - **自愈层 v6.37/v6.38（2026-08-29）**：卡片渲染撕裂根治——CommonMark 块级标签不能打断段落（文字+换行+`<div>` 撕裂）与卡片内部空行拆分问题，`fixVcpBlank` 补空行/压缩空行，整卡回归单一 htmlFlow（稳定测试 105 断言全绿）。
 - **消息主体渲染器 VCP 接管（2026-08-29）**：主 markdown 渲染器接入 VCP 渲染，消息卡片从此真正渲染为界面（此前官方策略是当源码文本显示）。
 - 早期更新（v0.3.0 · 2026-08-24）：
@@ -40,7 +41,7 @@
 ## 版本
 
 - **插件版本**：`package.json` 的 `version`（当前 **0.6.0**），随 `dsh plugin` 升级。
-- **补丁代号**：`patch/` 注入模块的演进代号（当前 **v6 · 子版本 v6.38**），由 `install-v6.cjs` 应用到前端 bundle，二者独立演进。前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
+- **补丁代号**：`patch/` 注入模块的演进代号（当前 **v7**），由 `install-v6.cjs` / `install-v7.cjs` 应用到前端 bundle，二者独立演进。前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x**（vc/hp 与 Xu/jd 自动探测适配），以及 **0.1.5-rc.2+**（react-markdown 风格渲染器，由 `install-v7.cjs` 适配）。
 - 详细变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 组成
@@ -49,6 +50,7 @@
 |---|---|---|
 | 一键安装器 | `patch/install-all.cjs` | **推荐**：一条命令 = `install-v6.cjs`（渲染能力）+ `trusted-patch.cjs`（可信模式 vc 放行）；幂等 + 备份回滚 + `node --check` 健康检查，锚点不匹配安全中止 |
 | 万能安装器 | `patch/install-v6.cjs` | 渲染能力 v6 全量补丁（install-all 的组件①）：自动探测 dist bundle，任意历史状态 → v6（幂等 + 备份回滚） |
+| **v7 代安装器** | `patch/install-v7.cjs` | **新增**：`dsh-web-frontend 0.1.5-rc.2+`（react-markdown 风格渲染器）适配；自动探测 / 幂等 / 备份回滚 / `node --check` 语法门；**目标不是该代时安全中止不写入**。自检：`node tests/verify-v7.cjs` |
 | 稳定区渲染模块 | `patch/v6-inject.js` | 注入 dist bundle 的增量渲染引擎：容器感知块级缓存、流式尾巴占位、KaTeX 公式、Mermaid 查看器；`onclick="input('...')"` 桥接为真实交互；安全过滤 script/iframe/object/embed、on* 事件与 javascript: 协议 |
 | **vcp-fast 加速引擎** | `patch/v6-inject.js` | 容器感知块级增量：已闭合块缓存（元素引用跨帧不变 → React 跳过 diff → 动画真循环），只重渲染尾巴；实测缓存命中 **1200~6800 倍**、增量 **12 倍** 提速 |
 | 插件（Host 半侧） | `lib/index.js` | 渲染/美学双开关状态（**落盘持久化**）+ 系统提示词分层注入（结构铁律必注入 + 美学工具包可选）+ `/fonts` 字体服务（**内置精选 + 外置大库双源**）+ 知识层共享（协议附带本机 DESIGN.md 路径，任何 agent 可读） |
