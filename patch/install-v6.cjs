@@ -106,6 +106,27 @@ const VC_NEW_END = String.raw`u[d.name]=d.value;`
 const VC_DEF_NEW_BEFORE = String.raw`}function Xu(n,i){`
 const SCRIPT_FILTER_NEW = String.raw`if(l.localName==="script"||l.localName==="iframe"||l.localName==="object"||l.localName==="embed")return null;`
 
+// ---- 第三代前端锚点（dsh-web-frontend 0.1.5-rc.1+ · 压缩器再改名 u5/wg，函数参数 (t,r,i)）----
+// 该代 module 作用域里的 `vc` 已被复用为无关的 reconciler（不再是 DOM→vdom 转换器），
+// 因此锚点必须是 u5（DOM→vdom 转换器）与 wg（样式解析）；case"html" 形态也变为 t.value。
+// 属性循环变量：i = DOM 节点、s = props 对象、u = 单个属性。
+let VC_G3_ORIG = String.raw`for(const u of i.attributes)u.name==="class"?s.className=u.value:u.name==="style"?s.style=wg(u.value):s[u.name]=u.value;`
+let VC_G3_START = String.raw`for(const u of i.attributes)`
+let VC_G3_END = String.raw`s[u.name]=u.value;`
+let VC_DEF_G3_BEFORE = String.raw`}function u5(t,r){`
+let SCRIPT_FILTER_G3 = String.raw`if(i.localName==="script"||i.localName==="iframe"||i.localName==="object"||i.localName==="embed")return null;`
+
+// case"html" → v6（v3：节点参数 t、上下文参数 i；三态化 !== "0"）
+let CASE_ORIG_G3 = String.raw`case"html":return t.value;`
+let CASE_V6_G3 = String.raw`case"html":return function(){if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"){try{var vr=window.__vcpStable&&window.__vcpStable.render(t.value,i.streaming);if(vr!==null&&vr!==undefined)return vr}catch(e){if(typeof console!=="undefined")console.warn("[vcp] html 渲染异常，已回退源码",e)}}else if(typeof console!=="undefined")console.warn("[vcp] html 渲染已关闭（dsh.rawHtml===\"0\"，</> 按钮可重新开启）");return t.value}();`
+
+// u5 属性循环 → v6（style 解析内联，不依赖 wg 函数名；含 onclick 桥 / on* 拒绝 / URL 白名单 / ref 锁定）
+let VC_V6_G3 = String.raw`for(const u of i.attributes){if(u.name==="onclick"){const m=/^input\s*\(\s*['"]{1}([\s\S]*?)['"]{1}\s*\)\s*;?\s*$/.exec(u.value);if(m)s.onClick=function(){const fn=window.__dshInput;fn&&fn(m[1])};continue}if(/^on/i.test(u.name))continue;if(u.name==="style"){let sv=u.value;sv=sv.replace(/position\s*:\s*fixed\s*;?/gi,"").replace(/z-index\s*:\s*\d{4,}\s*;?/gi,"").replace(/(?<![\w-])content\s*:[^;]*;?/gi,"");let so={};for(const st of sv.split(";")){const ci=st.indexOf(":");if(ci===-1)continue;const k=st.slice(0,ci).trim().replace(/-([a-z])/g,(x,y)=>y.toUpperCase());so[k]=st.slice(ci+1).trim()}s.style=so;s.ref=function(el){if(el)for(const st2 of sv.split(";")){const j=st2.indexOf(":");if(j===-1)continue;const p=st2.slice(0,j).trim(),v=st2.slice(j+1).trim();if(v&&/^(color|font-family|font-size|font-weight|font-style|line-height|letter-spacing|text-align|text-shadow)$/.test(p))el.style.setProperty(p,v,"important")}};continue}if(u.name==="class"){s.className=u.value;continue}if(u.name==="href"&&!/^(https?:|mailto:|\/|#)/i.test(u.value))continue;if(u.name==="src"&&!/^(https?:|data:image\/|\/|#)/i.test(u.value))continue;if((u.name==="action"||u.name==="formaction"||u.name==="xlink:href")&&!/^(https?:|mailto:|\/|#)/i.test(u.value))continue;s[u.name]=u.value}`
+
+// case"code" 围栏兜底（v6.30 → v6.35 三态化 · v3 形态）
+let CODE_CASE_RAW_G3 = String.raw`case"code":return Lg(t,r,i);`
+let CODE_CASE_V3_G3 = String.raw`case"code":{try{const _v=(t.value||"").trim();if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"&&/^<div\s+id=["']vcp-root["']/i.test(_v)){const _r=window.__vcpStable&&window.__vcpStable.render(t.value,i.streaming);if(_r!==null&&_r!==undefined)return _r}}catch(_e){if(typeof console!=="undefined")console.warn("[vcp] code 围栏渲染异常，已回退代码块",_e)}return Lg(t,r,i)}`
+
 // case"html" → v6（新版：流式标记在 context 参数 l 上；v6.35 三态化 !== "0"）
 const CASE_V6_NEW = String.raw`case"html":return function(){if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"){try{var vr=window.__vcpStable&&window.__vcpStable.render(n.value,l.streaming);if(vr!==null&&vr!==undefined)return vr}catch(e){if(typeof console!=="undefined")console.warn("[vcp] html 渲染异常，已回退源码",e)}}else if(typeof console!=="undefined")console.warn("[vcp] html 渲染已关闭（dsh.rawHtml===\"0\"，</> 按钮可重新开启）");return n.value}();`
 
@@ -123,6 +144,38 @@ const CODE_CASE_RAW = String.raw`case"code":return wp(n,r,i);`
 const CODE_CASE_V1 = String.raw`case"code":{try{const _v=(n.value||"").trim();if(/^<div\s+id=["']vcp-root["']/i.test(_v)){const _r=window.__vcpStable&&window.__vcpStable.render(n.value,i.streaming);if(_r!==null&&_r!==undefined)return _r}}catch(_e){}return wp(n,r,i)}`
 const CODE_CASE_V2 = String.raw`case"code":{try{const _v=(n.value||"").trim();if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")==="1"&&/^<div\s+id=["']vcp-root["']/i.test(_v)){const _r=window.__vcpStable&&window.__vcpStable.render(n.value,i.streaming);if(_r!==null&&_r!==undefined)return _r}}catch(_e){}return wp(n,r,i)}`
 const CODE_CASE_V3 = String.raw`case"code":{try{const _v=(n.value||"").trim();if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"&&/^<div\s+id=["']vcp-root["']/i.test(_v)){const _r=window.__vcpStable&&window.__vcpStable.render(n.value,i.streaming);if(_r!==null&&_r!==undefined)return _r}}catch(_e){if(typeof console!=="undefined")console.warn("[vcp] code 围栏渲染异常，已回退代码块",_e)}return wp(n,r,i)}`
+
+
+// ---- 跨代适配：按结构抽取（唯一实现见 patch/gen-shape.cjs）-------------------
+// 前端局部名是构建产物、不是接口（实测 DOM→React 转换器已改名四次：vc → Xu → u5 → c8 → K6），
+// 所以这里不维护「每代一张锚点表」，而是从 bundle 文本里认出结构，再把该代的真实标识符
+// 填进锚点模板。抽不出来就返回 null —— 调用方退回下面写死的三代锚点组，安全中止绝不猜。
+const { extractShape, buildAnchors } = require('./gen-shape.cjs')
+
+let G3_HOST_ALIAS = ''
+let G3_ON_FILTER = 'if(/^on/i.test(u.name))continue;'
+let G3_DEF_AFTER = ';function u5(t,r){'
+
+/** 用抽取到的形态覆盖 G3 锚点；返回 shape 或 null。 */
+function applyShape(text) {
+  const shape = extractShape(text)
+  if (!shape) return null
+  const a = buildAnchors(shape)
+  CASE_ORIG_G3 = a.caseOrig
+  CASE_V6_G3 = a.caseV6
+  CODE_CASE_RAW_G3 = a.codeOrig
+  CODE_CASE_V3_G3 = a.codeV3
+  VC_V6_G3 = a.vcLoop
+  VC_G3_ORIG = a.vcOrig
+  VC_G3_START = a.vcStart
+  VC_G3_END = a.vcEnd
+  VC_DEF_G3_BEFORE = a.defBefore
+  G3_DEF_AFTER = a.defAfter
+  SCRIPT_FILTER_G3 = a.scriptFilter
+  G3_ON_FILTER = a.onFilter
+  G3_HOST_ALIAS = a.hostAlias
+  return shape
+}
 
 // ---- 工具 ------------------------------------------------------------------
 function countOccurrences(text, needle) {
@@ -168,9 +221,14 @@ function main() {
   console.log('[install-v6] bundle:', file)
   let t = fs.readFileSync(file, 'utf8')
 
-  // 前端代际探测：rc.8+ 压缩器改名（Xu/jd 或 Sd），锚点组不同（幂等加固与主流程共用）
-  const isNewFrontend = t.includes('function Xu(n,i){') && !t.includes('function vc(n,r){')
-  if (isNewFrontend) console.log('[install-v6] 探测到新版前端（rc.8+ · Xu 压缩形态），使用新锚点组')
+  // 前端代际探测：v1 = vc/hp（rc.5~rc.7）· v2 = Xu/jd|Sd（rc.8+~0.1.1-rc.x）· v3 = u5/wg（0.1.5-rc.1+）
+  // 锚点组随代际不同（幂等加固与主流程共用）。
+  const shape = applyShape(t)
+  const isGen3 = shape !== null || (t.includes('function u5(t,r){') && t.includes('case"html":return t.value;'))
+  if (shape) console.log('[install-v6] 按结构抽取锚点：vdom=' + shape.vdomFn + '(' + shape.vp1 + ',' + shape.vp2 + ') attr=' + shape.attrVar + ' react=' + shape.reactNs + ' code=' + shape.codeFn + '(' + shape.swNode + ',' + shape.swK + ',' + shape.swC + ')')
+  const isNewFrontend = !isGen3 && t.includes('function Xu(n,i){') && !t.includes('function vc(n,r){')
+  if (isGen3) console.log('[install-v6] 探测到第三代前端（0.1.5-rc.1+ · u5/wg 压缩形态），使用 v3 锚点组')
+  else if (isNewFrontend) console.log('[install-v6] 探测到新版前端（rc.8+ · Xu 压缩形态），使用新锚点组')
 
   // 已是 v6 → 增量加固：老 v6.0 形态（==="1"）升级三态化、补 case"code" 围栏兜底；
   // 无变更则跳过（幂等）。有变更时备份 + 写回 + node --check + 失败回滚。
@@ -220,14 +278,15 @@ function main() {
   fs.copyFileSync(file, bak)
   console.log('[install-v6] 备份:', bak)
 
-  const caseTarget = isNewFrontend ? CASE_V6_NEW : CASE_V6
+  const caseTarget = isGen3 ? CASE_V6_G3 : (isNewFrontend ? CASE_V6_NEW : CASE_V6)
+  const caseOrig = isGen3 ? CASE_ORIG_G3 : CASE_ORIG
 
   let next = t
 
   // 1) case"html" 分支 → v6
-  if (countOccurrences(next, CASE_ORIG) === 1) {
-    next = replaceOnce(next, CASE_ORIG, caseTarget, 'case"html"(原始)')
-  } else if (!isNewFrontend && countOccurrences(next, CASE_ENHANCED_START) === 1 && countOccurrences(next, CASE_ENHANCED_END) >= 1) {
+  if (countOccurrences(next, caseOrig) === 1) {
+    next = replaceOnce(next, caseOrig, caseTarget, 'case"html"(原始)')
+  } else if (!isNewFrontend && !isGen3 && countOccurrences(next, CASE_ENHANCED_START) === 1 && countOccurrences(next, CASE_ENHANCED_END) >= 1) {
     next = replaceRange(next, CASE_ENHANCED_START, CASE_ENHANCED_END, caseTarget, 'case"html"(增强态)')
   } else {
     console.error('[install-v6] ✗ case"html" 分支：既非原始态也非已补丁增强态，无法识别。')
@@ -242,7 +301,16 @@ function main() {
 
   // 1.5) case"code" 围栏兜底 → v6.35 三态化（增强能力：模型把卡片包进 ```html 围栏时仍渲染）
   // 新版前端（rc.8+）case"code" 形态未收录：跳过 + 警告，不阻塞安装（不影响基础渲染）。
-  if (isNewFrontend) {
+  if (isGen3) {
+    if (countOccurrences(next, CODE_CASE_V3_G3) !== 0) {
+      console.log('[install-v6] ✓ case"code" 围栏兜底已是 v6.35 三态化（v3 形态）')
+    } else if (countOccurrences(next, CODE_CASE_RAW_G3) === 1) {
+      next = replaceOnce(next, CODE_CASE_RAW_G3, CODE_CASE_V3_G3, 'case"code"(v3 原始)')
+      console.log('[install-v6] ✓ case"code" 围栏兜底 → v6.35 三态化（v3 形态）')
+    } else {
+      console.warn('[install-v6] case"code"（v3）形态未知/异常，围栏兜底跳过（不影响基础渲染）')
+    }
+  } else if (isNewFrontend) {
     console.warn('[install-v6] 新版前端（rc.8+）case"code" 锚点未收录，围栏兜底跳过（不影响基础渲染）')
   } else if (countOccurrences(next, CODE_CASE_V3) !== 0) {
     console.log('[install-v6] ✓ case"code" 围栏兜底已是 v6.35 三态化')
@@ -267,7 +335,10 @@ function main() {
   }
 
   // 2) vc(Xu) 属性循环 → v6
-  if (isNewFrontend) {
+  if (isGen3) {
+    // v3（0.1.5-rc.1+）：原始态区间替换（起点/终点不含 wg 函数名），额外补 script/iframe 硬过滤
+    next = replaceRange(next, VC_G3_START, VC_G3_END, SCRIPT_FILTER_G3 + VC_V6_G3, 'v3 属性循环(原始态)')
+  } else if (isNewFrontend) {
     // rc.8+：原始态区间替换（起点/终点不含 jd/Sd 函数名，两版通用），额外补 script 过滤
     next = replaceRange(next, VC_NEW_START, VC_NEW_END, SCRIPT_FILTER_NEW + VC_V6_NEW, 'Xu 属性循环(rc.8+ 原始态)')
   } else if (countOccurrences(next, VC_ORIG) === 1) {
@@ -294,10 +365,11 @@ function main() {
     console.error('[install-v6] 读取 patch/v6-inject.js 失败：', e.message)
     process.exit(1)
   }
-  const defBefore = isNewFrontend ? VC_DEF_NEW_BEFORE : VC_DEF_BEFORE
-  const defAfter = isNewFrontend ? ';function Xu(n,i){' : ';function vc(n,r){'
-  const defLabel = isNewFrontend ? 'Xu 定义前注入 v6 模块' : 'vc 定义前注入 v6 模块'
-  next = replaceOnce(next, defBefore, '}' + v6Inject + defAfter, defLabel)
+  const defBefore = isGen3 ? VC_DEF_G3_BEFORE : (isNewFrontend ? VC_DEF_NEW_BEFORE : VC_DEF_BEFORE)
+  const defAfter = isGen3 ? G3_DEF_AFTER : (isNewFrontend ? ';function Xu(n,i){' : ';function vc(n,r){')
+  const defLabel = isGen3 ? 'u5 定义前注入 v6 模块' : (isNewFrontend ? 'Xu 定义前注入 v6 模块' : 'vc 定义前注入 v6 模块')
+  const injectText = '}' + (isGen3 && shape ? G3_HOST_ALIAS : '') + v6Inject + defAfter
+  next = replaceOnce(next, defBefore, injectText, defLabel)
   if (next === null) {
     console.error('[install-v6] v6 模块注入失败，中止（备份已保留）。')
     process.exit(1)
@@ -318,7 +390,7 @@ function main() {
   }
 
   const written = fs.readFileSync(file, 'utf8')
-  const onFilterMark = isNewFrontend ? 'if(/^on/i.test(d.name))continue;' : 'if(/^on/i.test(c.name))continue;'
+  const onFilterMark = isGen3 ? G3_ON_FILTER : (isNewFrontend ? 'if(/^on/i.test(d.name))continue;' : 'if(/^on/i.test(c.name))continue;')
   const features = [
     [V6_MARK, 'v6 标记 window.__vcpStable'],
     ['window.__dshInput', 'onclick 交互桥 __dshInput'],
@@ -330,13 +402,17 @@ function main() {
     if (!written.includes(mark)) {
       ok = false
       console.error(`[install-v6] 特征缺失：${label}`)
-      const idx = written.indexOf(isNewFrontend ? VC_NEW_START : VC_ENHANCED_START)
+      const idx = written.indexOf(isGen3 ? VC_G3_START : (isNewFrontend ? VC_NEW_START : VC_ENHANCED_START))
       if (idx !== -1) console.error('[install-v6] debug vc 循环附近 >>>', JSON.stringify(written.slice(idx, idx + 260)))
     }
   }
-  if (countOccurrences(written, CASE_ORIG) !== 0) {
+  if (countOccurrences(written, caseOrig) !== 0) {
     ok = false
     console.error('[install-v6] 特征异常：仍存在原始 case"html" 分支')
+  }
+  if (isGen3 && countOccurrences(written, VC_G3_ORIG) !== 0) {
+    ok = false
+    console.error('[install-v6] 特征异常：仍存在原始 v3 属性循环')
   }
   if (isNewFrontend && countOccurrences(written, String.raw`for(const d of l.attributes)d.name==="class"`) !== 0) {
     ok = false
