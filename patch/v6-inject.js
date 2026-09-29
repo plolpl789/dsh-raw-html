@@ -84,15 +84,85 @@
       if (typeof console !== 'undefined') console.debug('[vcp] dsh.rawHtml 未设置，渲染器自动默认开启（</> 按钮可关闭）')
     }
   } catch (e) {}
-  // 宿主函数别名（跨前端代际兼容）：rc.5~rc.7 为 vc/hp；rc.8+ 压缩器改名 Xu/jd（rc.8 为 Sd）。
-  // 运行时 typeof 探测——两代 bundle 通用，行为与旧版直接调用完全一致。
+  // 宿主 React 句柄（跨前端代际兼容）：
+  //   v1/v2（rc.5~rc.7、rc.8+~0.1.1-rc.x）：作用域内有 f（React 命名空间，含 jsx/Fragment）。
+  //   v3（0.1.5-rc.1+）：拆成 I（react：createElement/Fragment）+ a（jsx-runtime：jsx/jsxs），
+  //   作用域内不再有 f。本文件内部统一走 __vcpF，不再直接绑定某一代的标识符。
+  var __vcpF = (function () {
+    // 1) 宿主别名（补丁脚本按结构抽取后写在模块前面，名字最准）
+    try {
+      if (typeof __vcpHostReact !== 'undefined' && __vcpHostReact && typeof __vcpHostReact.createElement === 'function') {
+        return { jsx: __vcpHostReact.createElement, jsxs: __vcpHostReact.createElement, Fragment: __vcpHostReact.Fragment, createElement: __vcpHostReact.createElement }
+      }
+    } catch (e) {}
+    // 2) v1/v2：作用域内的 f（React 命名空间，含 jsx/Fragment）
+    try {
+      if (typeof f !== 'undefined' && f && (typeof f.jsx === 'function' || typeof f.createElement === 'function')) return f
+    } catch (e) {}
+    // 3) 直接用 React 自己的 createElement：jsx(type,props) 与 createElement(type,props) 等价
+    //    （props.children 已显式传入），这样就不依赖每版都在改名的 jsx-runtime 命名空间。
+    try {
+      if (typeof I !== 'undefined' && I && typeof I.createElement === 'function') {
+        return { jsx: I.createElement, jsxs: I.createElement, Fragment: I.Fragment, createElement: I.createElement }
+      }
+    } catch (e) {}
+    // 4) 兜底：jsx-runtime 命名空间（Fragment/createElement 仍从 React 取）
+    try {
+      if (typeof a !== 'undefined' && a && typeof a.jsx === 'function') {
+        var _frag = (typeof I !== 'undefined' && I && I.Fragment) || undefined
+        var _ce = (typeof I !== 'undefined' && I && I.createElement) || undefined
+        return { jsx: a.jsx, jsxs: a.jsxs || a.jsx, Fragment: _frag, createElement: _ce }
+      }
+    } catch (e) {}
+    return null
+  })()
+  // 宿主函数别名（跨前端代际兼容）：
+  //   v1：vc + hp（rc.5~rc.7）· v2：Xu + jd/Sd（rc.8+~0.1.1-rc.x）· v3：u5 + wg（0.1.5-rc.1+）。
+  // v3 起标识符被复用（该代 module 作用域里的 `vc` 是无关的 reconciler，不再是 DOM→vdom 转换器），
+  // 所以 __vcpVc 不能只按名字取——用「是否处理 DOM 节点」特征甄别（源码含 nodeType），v3 的 u5 排最前。
+  var __vcpHostVc = null
+  // 转换器认人靠「试调用一次 + 返回值形态」，不靠名字顺序 —— bundle 是扁平作用域，
+  // 压缩器会把无关模块压成同名（0.1.5-rc.2 里 vc 是状态库的浅比较函数、hp 是 SVG 图标组件，
+  // 旧探针按名字顺序取会抓到诱饵：返回值是布尔 → 卡片渲染成空）。
+  // 宿主别名（补丁脚本按结构写入，见 patch/gen-shape.cjs 的 hostAlias）命中且形态正确时直接用。
+  function __vcpVcProbe(fn) {
+    try {
+      var el = new DOMParser().parseFromString('<div data-vcp-probe="1"></div>', 'text/html').body.firstChild
+      var r = fn(el, 0)
+      return !!(r && typeof r === 'object' && r.tag === 'div' && r.props && typeof r.props === 'object')
+    } catch (e) { return false }
+  }
+  function __vcpVcPick() {
+    var cands = []
+    try { if (typeof __vcpHostVdom === 'function') cands.push(__vcpHostVdom) } catch (e) {}
+    try { if (typeof c8 === 'function') cands.push(c8) } catch (e) {}
+    try { if (typeof u5 === 'function') cands.push(u5) } catch (e) {}
+    try { if (typeof vc === 'function') cands.push(vc) } catch (e) {}
+    try { if (typeof Xu === 'function') cands.push(Xu) } catch (e) {}
+    for (var i = 0; i < cands.length; i++) if (__vcpVcProbe(cands[i])) return cands[i]
+    return cands.length ? cands[0] : null
+  }
   function __vcpVc() {
-    var fn = typeof vc === 'function' ? vc : (typeof Xu === 'function' ? Xu : null)
-    return fn && fn.apply(null, arguments)
+    if (!__vcpHostVc) __vcpHostVc = __vcpVcPick()
+    return __vcpHostVc ? __vcpHostVc.apply(null, arguments) : null
+  }
+  // 样式解析（跨代际等价实现）：v1/v2 的 hp/jd/Sd 与 v3 的 wg 契约一致（分号切分 + kebab→camel），
+  // 此处内联实现——既不依赖会被压缩器改名的宿主函数，也避开 v3 里同名标识符被挪用的风险；
+  // 与 patch/install-v6.cjs 注入 bundle 的 VC_V6 内联解析器行为一致（插件作者在 rc.8+ 适配时即用此策略）。
+  function __vcpStyleText(sv) {
+    var out = {}
+    if (sv == null) return out
+    var parts = String(sv).split(';')
+    for (var _p = 0; _p < parts.length; _p++) {
+      var _c = parts[_p].indexOf(':')
+      if (_c === -1) continue
+      var _k = parts[_p].slice(0, _c).trim().replace(/-([a-z])/g, function (m, ch) { return ch.toUpperCase() })
+      if (_k) out[_k] = parts[_p].slice(_c + 1).trim()
+    }
+    return out
   }
   function __vcpHp(s) {
-    var fn = typeof hp === 'function' ? hp : (typeof jd === 'function' ? jd : (typeof Sd === 'function' ? Sd : null))
-    return fn ? fn(s) : {}
+    return __vcpStyleText(s)
   }
   // ---- 可信模式（Trusted Mode）v7.1 · 先生定调 2026-08-29 ----
   // 双人私密会话内容双方可信 → 正文可放行 script（WebGL/Shader/fetch 由此解锁）。
@@ -647,7 +717,7 @@
     var b = doc.body
     for (var j = 0; j < b.childNodes.length; j++) o.push(__vcpVc(b.childNodes[j], o.length))
     if (!o.length) return null
-    var res = o.length === 1 ? o[0] : f.jsx(f.Fragment, { children: o })
+    var res = o.length === 1 ? o[0] : __vcpF.jsx(__vcpF.Fragment, { children: o })
     guardChildren(res) // v6.23：子容器布局防崩递归兜底（新增块粒度，微秒级）
     return res
   }
@@ -1082,7 +1152,7 @@
     }
     // 流式：未闭合标签防御——仅当整个 html 连一个 '>' 都没有（首个开标签写到一半）
     // 才不渲染；末尾标签未闭合是流式常态，交给 v6 的 incomplete/tail 增量处理。
-    if (v.indexOf('>') === -1) return f.jsx(f.Fragment, { children: [] })
+    if (v.indexOf('>') === -1) return __vcpF.jsx(__vcpF.Fragment, { children: [] })
     var key = 's:' + v
     if (F.c.has(key)) { F.hits++; return F.c.get(key) }
 
@@ -1131,15 +1201,15 @@
       if (ch) cProps.style = Object.assign({}, cProps.style, ch.vars, ch.base)
       if (!F.open.mathRef) F.open.mathRef = makeMathRef(F.open.props.ref)
       cProps.ref = F.open.mathRef
-      R = f.jsx(F.open.tag, cProps)
+      R = __vcpF.jsx(F.open.tag, cProps)
       var outers = []
       for (var j = 0; j < F.outer.length; j++) outers.push(F.outer[j].el)
-      if (outers.length > 0) R = f.jsx(f.Fragment, { children: [R].concat(outers) })
+      if (outers.length > 0) R = __vcpF.jsx(__vcpF.Fragment, { children: [R].concat(outers) })
     } else {
       var all = []
       for (var m = 0; m < F.outer.length; m++) all.push(F.outer[m].el)
       if (tailEl) all.push(tailEl)
-      R = all.length === 0 ? null : (all.length === 1 ? all[0] : f.jsx(f.Fragment, { children: all }))
+      R = all.length === 0 ? null : (all.length === 1 ? all[0] : __vcpF.jsx(__vcpF.Fragment, { children: all }))
     }
 
     if (R) {
@@ -1749,7 +1819,7 @@
   function injectRootChrome(R) {
     if (!R || typeof R !== 'object') return
     var el = R
-    if (el.type === f.Fragment && el.props && Array.isArray(el.props.children) && el.props.children.length) {
+    if (el.type === __vcpF.Fragment && el.props && Array.isArray(el.props.children) && el.props.children.length) {
       el = el.props.children[0]
     }
     if (!el || typeof el !== 'object' || !el.props) return
@@ -1816,7 +1886,7 @@
   // 兼容测试 stub（{tag,props,children}，ref 在 props.ref）用 'ref' in node 区分。
   function attachMathRef(node, streaming) {
     if (!node || typeof node !== 'object') return
-    var isEl = (node.type && node.type !== f.Fragment) || !!node.tag
+    var isEl = (node.type && node.type !== __vcpF.Fragment) || !!node.tag
     if (isEl) {
       var curRef = ('ref' in node ? node.ref : (node.props && node.props.ref)) || null
       if (curRef && curRef.__vcpMathRef) return

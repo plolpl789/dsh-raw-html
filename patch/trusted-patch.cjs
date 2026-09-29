@@ -55,29 +55,29 @@ if (!file) {
 
 let t = fs.readFileSync(file, 'utf8')
 
-// 代际探测：老版（vc/i）或新版（Xu/l）
-const isNewFrontend = t.indexOf('function Xu(n,i){') !== -1 && t.indexOf('function vc(n,r){') === -1
-const ANCHOR = isNewFrontend ? ANCHOR_NEW : ANCHOR_OLD
-const TRUSTED = isNewFrontend ? TRUSTED_NEW : TRUSTED_OLD
-if (isNewFrontend) console.log('[trusted] 探测到新版前端（rc.8+ · Xu 压缩形态），使用新锚点组')
+// 形状驱动（实现见 patch/gen-shape.cjs）：script/iframe/object/embed 硬过滤的变量名
+// 每代都在变（i → l → o …），所以按形状找那条语句、取它的真实变量名再条件化。
+const { matchScriptFilter, hasTrustedFilter, trustedFilter } = require('./gen-shape.cjs')
 
-// 幂等：已打补丁（vc/Xu 锚点已被可信条件替换）→ 跳过
-if (t.indexOf(TRUSTED_OLD) !== -1 || t.indexOf(TRUSTED_NEW) !== -1) {
+// 幂等：已被替换成可信条件 → 跳过
+if (hasTrustedFilter(t)) {
   console.log('[trusted] 补丁已应用，跳过')
   process.exit(0)
 }
 
-const count = t.split(ANCHOR).length - 1
-if (count !== 1) {
-  console.error(`[trusted] 锚点命中 ${count} 次（需要恰好 1 次），中止，未写入任何修改`)
+const filter = matchScriptFilter(t)
+if (!filter) {
+  console.error('[trusted] script 硬过滤锚点未唯一命中，中止，未写入任何修改')
   console.error('[trusted] 若 bundle 尚未打过渲染补丁，请先运行 install-v6.cjs（它会注入 script 硬过滤锚点）')
   process.exit(1)
 }
+const ANCHOR = filter.raw
+const TRUSTED = trustedFilter(filter.nodeVar)
+console.log('[trusted] 形状抽取：过滤变量 = ' + filter.nodeVar)
 
-// 语法预检（包进函数上下文，return 才合法；新老变量名分别预检）
+// 语法预检（包进函数上下文，return 才合法）
 try {
-  new vm.Script('function vc(n,r){const i=n,s={};' + TRUSTED_OLD + '}', { filename: 'trusted-fragment-old' })
-  new vm.Script('function Xu(n,i){const l=n,u={};' + TRUSTED_NEW + '}', { filename: 'trusted-fragment-new' })
+  new vm.Script('function t(' + filter.nodeVar + '){const s={};' + TRUSTED + '}', { filename: 'trusted-fragment' })
 } catch (e) {
   console.error('[trusted] 补丁片段语法校验失败:', e.message)
   process.exit(1)
