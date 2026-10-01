@@ -1,7 +1,7 @@
 {
   "name": "dsh-raw-html",
-  "version": "0.6.0",
-  "description": "VCP 视觉通感协议规范插件：消息 HTML 渲染开关 + vcp-fast 缓存/增量加速渲染引擎 + 内置 7 款开源精选字体 + 设计规范注入（任何电脑/agent 即插即用）",
+  "version": "0.7.1",
+  "description": "VCP 视觉通感协议插件：现代 DSH 使用官方 assistant slot 隔离渲染 HTML，旧版保留 legacy patch 兼容",
   "keywords": [
     "deepseek",
     "deepseek-harness",
@@ -14,6 +14,11 @@
   ],
   "private": true,
   "type": "module",
+  "scripts": {
+    "test:modern": "node --test tests/slot-renderer.test.mjs",
+    "test:legacy": "node tests/security.test.mjs && node tests/smoke.test.mjs && node tests/stable.test.mjs && node tests/math.test.mjs && node tests/mermaid.test.mjs && node tests/trusted.test.mjs && node tests/boost-fontface.test.cjs",
+    "test": "npm run test:modern && npm run test:legacy"
+  },
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
@@ -52,18 +57,23 @@
       "inject": [
         "react",
         "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-ui-slots"
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings"
       ],
       "platform": "web"
     }
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "react": "^18.3.1"
+    "react": "^18.3.1 || ^19.0.0"
   },
   "license": "MIT",
   "optionalDependencies": {
     "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
   }
 }

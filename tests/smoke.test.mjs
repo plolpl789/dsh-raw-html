@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
-const { JSDOM } = require('G:/AI/AI 助手/VCPChat-main/node_modules/jsdom')
+const { JSDOM } = require('jsdom')
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>')
 const { document, Node, window } = dom.window
