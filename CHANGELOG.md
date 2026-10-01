@@ -2,6 +2,15 @@
 
 本文件记录插件版本（`package.json` 的 `version`）与补丁代号（`patch/*` 注入模块）两条线的演进。
 
+## 0.7.1（官方 assistant-step slot · DSH 0.2.0-rc.2 实机适配）
+
+- **修复·接管项必须复刻官方 `inject`——否则卡片只显示源码（2026-10-01 · DSH 0.2.0-rc.2 实机定位）**：症状是插件两侧都已加载、宿主协议注入也生效（模型确实输出 `#vcp-root`），但消息仍以源码文本呈现。实机抓到的关键错是
+  `TypeError: usePresentation is not a function at ReasoningRow` 与 `slot entry crashed in 'conversation.chat.node'`。
+  根因：官方 `assistant-step` 注册项带 `inject: () => ({ hooks: { presentation } })`，靠它把 `usePresentation` 这个**标准席位**注入组件 props（`ui-renderer` 的 `cachedSessionInject → runInject(entry…)` 取自 `entry.inject`）。本插件以 priority `-1` 接管同一 cell 时没有带同样的 `inject`，于是接管项收到的 props 里没有 `usePresentation`；一旦委托回官方 `AssistantNodeView`，其 `ReasoningRow` 立即抛错，插槽机制判定该 entry 崩溃并**回退官方渲染**——表现为「HTML 卡片只显示源码」。修法：注册时原样带上官方 entry 的 `inject`（`if (official.inject !== undefined) registerOptions.inject = official.inject`）。验证：真实 DSH 0.2.0-rc.2 会话内 223 个 `conversation.chat.node` 节点零插件相关报错（修复前每次都报 `usePresentation` / `slot entry crashed`），并端到端跑通一条含 `#vcp-root` 的消息真实渲染成卡片。
+- **兼容·`react` peer 放宽到 19（DSH 0.2.0 起宿主为 React 19）**：`peerDependencies.react` 由 `^18.3.1` 改为 `^18.3.1 || ^19.0.0`。DSH 0.2.0 系列前端跑 React 19，插件管理器会以 peer 不兼容**直接拒绝安装**（同机实测该闸门拒掉过其它插件）；插件代码本身已在 React 19.2.8 上实机跑通（渲染、Shadow DOM、Trusted Mode、slot 接管均正常）。
+- **修复·卡片 hover 下载按钮会永久残留（2026-10-01 实机复现）**：`#dsh-raw-html-dl` 是全局单例、靠鼠标进出卡片显示/隐藏。卡片在 hover 期间被移除或重渲染（流式更新、切会话、React 重挂载）时，浏览器不会为已移除的节点补发 `mouseout`，隐藏定时器永不启动，于是按钮被永久留在屏幕上——表现为「没有卡片的地方也飘着一个『下载 HTML』」。修法：补 `mousemove` 兜底判定（指针不在卡片内就收起、在卡片内就跟随重定位），并补捕获阶段 `scroll` / `resize` 重定位，避免滚动后按钮停在旧坐标。验证：真机注入假卡片 → hover 显示 → 移除卡片后指针一动即自愈收起（`display:none`）。
+- **测试**：modern slot 回归新增一条断言——接管项必须携带官方同款 `inject`；测试用假 `slots` 同步补上 `inject` 的 entry 语义（与官方 SlotCore 一致：`inject` 记在 entry 上而非 `options` 里）。全套回归 `npm test` 通过（modern 11/11 + legacy 套件全绿）。
+
 ## 0.7.0（官方 assistant-step slot）
 
 - **架构**：现代 DSH 改用官方 `conversation.chat.node` / `assistant-step` keyed slot，注册 priority `-1` 的 `RawHtmlAssistant`；普通消息继续复用官方 Assistant component，不再修改 `dsh-web-frontend/dist/assets/index-*.js`，也不依赖 `vc` / `Xu` / `jd` 等压缩内部符号。

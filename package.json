@@ -1,6 +1,6 @@
 {
   "name": "dsh-raw-html",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "VCP 视觉通感协议插件：现代 DSH 使用官方 assistant slot 隔离渲染 HTML，旧版保留 legacy patch 兼容",
   "keywords": [
     "deepseek",
@@ -67,7 +67,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "react": "^18.3.1"
+    "react": "^18.3.1 || ^19.0.0"
   },
   "license": "MIT",
   "optionalDependencies": {

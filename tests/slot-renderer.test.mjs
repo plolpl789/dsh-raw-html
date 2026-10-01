@@ -76,6 +76,9 @@ function createSlots(initialEntries = []) {
         && (entry.options.priority ?? 0) === priority)
       if (duplicate) throw new Error('duplicate key+priority')
       const entry = { component, options: { ...options }, locale: options.locale }
+      // 与官方 SlotCore 一致：inject 记在 entry 上（不在 options 里），
+      // ui-renderer 的 runInject(entry…) 就是从这里取标准席位注入。
+      if (options.inject !== undefined) entry.inject = options.inject
       entries.push(entry)
       entries.sort((a, b) => (a.options.priority ?? 0) - (b.options.priority ?? 0))
       if (options.key === 'assistant-step' && priority === -1) rawRegistrations += 1
@@ -109,6 +112,9 @@ function officialEntry() {
     component: OfficialAssistant,
     options: { key: 'assistant-step', priority: 0 },
     locale: 'conversation',
+    // 官方 assistant-step 真实注册形态：靠这个 inject 把 usePresentation 标准席位
+    // 注入组件 props。接管项必须原样复刻，否则委托回官方组件时会崩。
+    inject: () => ({ hooks: { presentation: () => () => {} } }),
   }
 }
 
@@ -145,6 +151,19 @@ test('existing official assistant is shadowed at priority -1', () => {
   assert.equal(registry.entries[0].component, client.exports.RawHtmlAssistant)
   assert.equal(registry.rawRegistrations(), 1)
   dispose()
+})
+
+test('接管项复刻官方 inject，否则委托官方组件时 usePresentation 缺失导致 entry 崩溃', () => {
+  const client = loadClient()
+  const official = officialEntry()
+  const registry = createSlots([official])
+  client.exports.registerAssistantRenderer({ slots: registry.slots })
+  const ours = registry.entries.find(entry => entry.options.priority === -1)
+  assert.ok(ours, '应注册 priority -1 的接管项')
+  assert.equal(typeof ours.inject, 'function', '接管项必须带官方同款 inject')
+  assert.equal(ours.inject, official.inject, 'inject 应与官方同源（同一函数引用）')
+  assert.equal(typeof ours.inject().hooks.presentation, 'function', 'inject 产物应提供 presentation 席位')
+  assert.equal(ours.locale, official.locale)
 })
 
 test('late official registration is observed exactly once and subscription is released', () => {
